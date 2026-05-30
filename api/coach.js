@@ -7,16 +7,21 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.error('GEMINI_API_KEY not set in environment');
-    return res.status(500).json({ error: 'Server configuration error' });
+    return res.status(500).json({ error: 'API key not configured' });
   }
 
   try {
-    // Convert Claude format to Gemini format
-    const geminiMessages = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
+    // Add system prompt as first message
+    const allMessages = [
+      {
+        role: 'user',
+        parts: [{ text: systemPrompt }]
+      },
+      ...messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }))
+    ];
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -26,10 +31,7 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          system: {
-            parts: [{ text: systemPrompt }]
-          },
-          contents: geminiMessages,
+          contents: allMessages,
           generationConfig: {
             maxOutputTokens: 512,
           }
@@ -39,7 +41,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Gemini API error:', error);
+      console.error('Gemini error:', error);
       return res.status(response.status).json({ 
         error: error.error?.message || 'API error' 
       });
@@ -50,7 +52,7 @@ export default async function handler(req, res) {
     
     return res.status(200).json({ reply });
   } catch (error) {
-    console.error('Coach endpoint error:', error);
+    console.error('Error:', error);
     return res.status(500).json({ error: error.message });
   }
 }
